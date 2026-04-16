@@ -3,6 +3,7 @@ import {
   IMessage,
   IReference,
   IReferenceChunk,
+  ParagraphLocationRef,
   UploadResponseDataType,
 } from '@/interfaces/database/chat';
 import classNames from 'classnames';
@@ -31,6 +32,7 @@ interface IProps extends Partial<IRemoveMessageById>, IRegenerateMessage {
   avatar?: string;
   avatarDialog?: string | null;
   clickDocumentButton?: (documentId: string, chunk: IReferenceChunk) => void;
+  onParagraphLocationClick?: (ref: ParagraphLocationRef) => void;
   index: number;
   showLikeButton?: boolean;
   showLoudspeaker?: boolean;
@@ -44,6 +46,7 @@ const MessageItem = ({
   avatarDialog,
   sendLoading = false,
   clickDocumentButton,
+  onParagraphLocationClick,
   index,
   removeMessageById,
   regenerateMessage,
@@ -150,6 +153,7 @@ const MessageItem = ({
                   content={messageContent}
                   reference={reference}
                   clickDocumentButton={clickDocumentButton}
+                  onParagraphLocationClick={onParagraphLocationClick}
                 ></MarkdownContent>
               </div>
             )}

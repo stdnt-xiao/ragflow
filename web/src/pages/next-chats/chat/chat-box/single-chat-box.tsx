@@ -5,7 +5,10 @@ import { useClickDrawer } from '@/components/pdf-drawer/hooks';
 import { MessageType } from '@/constants/chat';
 import { useFetchChat, useGetChatSearchParams } from '@/hooks/use-chat-request';
 import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
-import { IClientConversation } from '@/interfaces/database/chat';
+import {
+  IClientConversation,
+  ParagraphLocationRef,
+} from '@/interfaces/database/chat';
 import { buildMessageUuidWithRole } from '@/utils/chat';
 import { useEffect } from 'react';
 import {
@@ -21,12 +24,14 @@ interface IProps {
   controller: AbortController;
   stopOutputMessage(): void;
   conversation: IClientConversation;
+  onParagraphLocationClick?: (ref: ParagraphLocationRef) => void;
 }
 
 export function SingleChatBox({
   controller,
   stopOutputMessage,
   conversation,
+  onParagraphLocationClick,
 }: IProps) {
   const {
     value,
@@ -96,6 +101,7 @@ export function SingleChatBox({
                 message,
               )}
               clickDocumentButton={clickDocumentButton}
+              onParagraphLocationClick={onParagraphLocationClick}
               index={i}
               removeMessageById={removeMessageById}
               regenerateMessage={regenerateMessage}

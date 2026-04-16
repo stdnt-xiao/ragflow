@@ -159,6 +159,16 @@ export interface Docagg {
   url?: string;
 }
 
+export interface ParagraphLocationRef {
+  doc_id: string;
+  doc_name: string;
+  page: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 // interface Chunk {
 //   chunk_id: string;
 //   content_ltks: string;

@@ -80,6 +80,11 @@ export default function ChatBasicSetting() {
         tooltip={t('ttsTip')}
       ></SwitchFormField>
       <TOCEnhanceFormField name="prompt_config.toc_enhance"></TOCEnhanceFormField>
+      <SwitchFormField
+        name={'prompt_config.precise_index'}
+        label={t('preciseIndex')}
+        tooltip={t('preciseIndexChatTip')}
+      ></SwitchFormField>
       <TavilyFormField></TavilyFormField>
       <KnowledgeBaseFormField></KnowledgeBaseFormField>
       <MetadataFilter></MetadataFilter>

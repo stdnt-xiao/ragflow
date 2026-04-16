@@ -689,7 +689,38 @@ async def async_chat(dialog, messages, stream=True, **kwargs):
     kwargs["knowledge"] = "\n------\n" + "\n\n------\n\n".join(knowledges)
     gen_conf = dialog.llm_setting
 
-    msg = [{"role": "system", "content": prompt_config["system"].format(**kwargs)+attachments_}]
+    sys_content = prompt_config["system"].format(**kwargs) + attachments_
+    if prompt_config.get("precise_index", False):
+        sys_content += (
+            "\n\nIMPORTANT: The knowledge base uses location tags to mark data in the document.\n"
+            "Tag format: TEXT{paragraph_location: linktext=\"TEXT\", [source=SOURCE,] "
+            "doc_id=D, page=N, x0=X0, y0=Y0, x1=X1, y1=Y1}\n\n"
+            "SOURCE values:\n"
+            "  source=context — value is from regular document body text\n"
+            "  source=table   — value originates from a table cell (YOU generate these)\n"
+            "  source=llm     — reserved, do not use\n\n"
+            "What is pre-tagged in the knowledge base:\n"
+            "1. Structured values in body text carry source=context.\n"
+            "2. Table/figure names (titles ending with 统计表, 折线图, Fig. N, etc.) carry source=table.\n"
+            "   Table cell numbers and text are NOT pre-tagged.\n\n"
+            "Rules you MUST follow:\n"
+            "A. Copy any pre-tagged TEXT and its tag VERBATIM — do not alter any field.\n"
+            "B. When you mention a specific value that comes from a table, YOU must append a "
+            "source=table tag to it, using the SAME doc_id/page/x0/y0/x1/y1 coordinates as "
+            "the table name tag that precedes the data in the knowledge base.\n"
+            "   Format: VALUE{paragraph_location: linktext=\"VALUE\", source=table, "
+            "doc_id=D, page=N, x0=X0, y0=Y0, x1=X1, y1=Y1}\n"
+            "C. Always cite the complete table/figure name with its tag when referencing table data.\n\n"
+            "Example — if the knowledge base contains:\n"
+            "  '航班正常率统计表{paragraph_location: linktext=\"航班正常率统计表\", "
+            "doc_id=abc, page=2, x0=50, y0=80, x1=500, y1=100} ... 龙江航空 72.35%'\n"
+            "Your answer should write:\n"
+            "  '航班正常率统计表{paragraph_location: linktext=\"航班正常率统计表\", "
+            "doc_id=abc, page=2, x0=50, y0=80, x1=500, y1=100} 中，"
+            "龙江航空起飞正常率为72.35%{paragraph_location: linktext=\"72.35%\", source=table, "
+            "doc_id=abc, page=2, x0=50, y0=80, x1=500, y1=100}'"
+        )
+    msg = [{"role": "system", "content": sys_content}]
     prompt4citation = ""
     if knowledges and (prompt_config.get("quote", True) and kwargs.get("quote", True)):
         prompt4citation = citation_prompt()

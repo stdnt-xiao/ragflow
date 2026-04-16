@@ -45,6 +45,7 @@ import { ExcelToHtmlFormField } from '../excel-to-html-form-field';
 import { LayoutRecognizeFormField } from '../layout-recognize-form-field';
 import { MaxTokenNumberFormField } from '../max-token-number-from-field';
 import { MinerUOptionsFormField } from '../mineru-options-form-field';
+import { PreciseIndexFormField } from '../precise-index-form-field';
 import { ButtonLoading } from '../ui/button';
 import { Input } from '../ui/input';
 import { DynamicPageRange } from './dynamic-page-range';
@@ -120,6 +121,7 @@ export function ChunkMethodDialog({
         auto_keywords: z.coerce.number().optional(),
         auto_questions: z.coerce.number().optional(),
         html4excel: z.boolean().optional(),
+        precise_index: z.boolean().optional(),
         toc_extraction: z.boolean().optional(),
         image_table_context_window: z.coerce.number().optional(),
         mineru_parse_method: z.enum(['auto', 'txt', 'ocr']).optional(),
@@ -358,6 +360,7 @@ export function ChunkMethodDialog({
                     <>
                       <EnableTocToggle />
                       <ImageContextWindow />
+                      <PreciseIndexFormField />
                     </>
                   )}
 

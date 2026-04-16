@@ -302,6 +302,7 @@ export const useUpdateKnowledge = (shouldFetchList = false) => {
       filename_embd_weight,
       task_page_size,
       pages,
+      precise_index,
       ext,
       ...parserExt
     } = parserConfig;
@@ -319,6 +320,7 @@ export const useUpdateKnowledge = (shouldFetchList = false) => {
       filename_embd_weight,
       task_page_size,
       pages,
+      precise_index,
       ext: { ...ext, ...parserExt },
     };
   };

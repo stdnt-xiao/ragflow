@@ -1,3 +1,4 @@
+import ParagraphLocationPdfPanel from '@/components/paragraph-location-pdf-panel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -5,7 +6,10 @@ import {
   useFetchSessionManually,
   useGetChatSearchParams,
 } from '@/hooks/use-chat-request';
-import { IClientConversation } from '@/interfaces/database/chat';
+import {
+  IClientConversation,
+  ParagraphLocationRef,
+} from '@/interfaces/database/chat';
 import { RootLayoutContainer } from '@/layouts/root-layout';
 import { cn } from '@/lib/utils';
 import { useMount } from 'ahooks';
@@ -25,6 +29,8 @@ export default function Chat() {
   const { t } = useTranslation();
   const [currentConversation, setCurrentConversation] =
     useState<IClientConversation>({} as IClientConversation);
+  const [activeParagraphRef, setActiveParagraphRef] =
+    useState<ParagraphLocationRef | null>(null);
 
   const { fetchSessionManually } = useFetchSessionManually();
 
@@ -137,11 +143,19 @@ export default function Chat() {
                     controller={controller}
                     stopOutputMessage={stopOutputMessage}
                     conversation={currentConversation}
+                    onParagraphLocationClick={setActiveParagraphRef}
                   />
                 </CardContent>
               </Card>
 
-              <ChatSettings hasSingleChatBox={hasSingleChatBox}></ChatSettings>
+              <ParagraphLocationPdfPanel
+                locationRef={activeParagraphRef}
+                onClose={() => setActiveParagraphRef(null)}
+              />
+              <ChatSettings
+                hasSingleChatBox={hasSingleChatBox}
+                forceClose={!!activeParagraphRef}
+              ></ChatSettings>
             </CardContent>
           </Card>
         </article>

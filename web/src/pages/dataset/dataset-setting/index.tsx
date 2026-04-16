@@ -78,6 +78,7 @@ export default function DatasetSettings() {
         auto_keywords: 0,
         auto_questions: 0,
         html4excel: false,
+        precise_index: false,
         topn_tags: 3,
         toc_extraction: false,
         image_table_context_window: 0,

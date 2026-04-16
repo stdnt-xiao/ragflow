@@ -299,7 +299,165 @@ def split_with_pattern(d, pattern: str, content: str, eng) -> list:
     return docs
 
 
-def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=None):
+def annotate_numbers(
+    text: str,
+    doc_id: str = "",
+    use_table_bbox: bool = False,
+    table_bbox: tuple | None = None,
+) -> str:
+    """
+    Scan a PDF chunk text that contains position tags (@@page\tleft\tright\ttop\tbottom##)
+    and append {paragraph_location: linktext="T", doc_id=D, page=N, x0=X0, y0=Y0,
+    x1=X1, y1=Y1} after each structured data token found in each section.
+
+    Position tags are preserved so that downstream remove_tag() still works correctly.
+
+    Coordinate mapping from tag fields:
+      left  → x0,  top    → y0
+      right → x1,  bottom → y1
+
+    Look-ahead semantics: text appearing BEFORE a position tag (i.e. the section whose
+    bounding box IS that tag) is annotated with that tag's coordinates.  This matches the
+    naive_merge assembly order where each section's tag is appended after its own text.
+    Text appearing after the LAST tag is annotated with the last tag's coordinates.
+
+    Table modes (use when precise cell coordinates are unavailable):
+      table_bbox=(page, left, right, top, bottom)
+          Explicit table-level coordinates.  Used by tokenize_table() where the
+          text has NO embedded POS_TAGs but poss[] is available.
+      use_table_bbox=True
+          Compute table-level bbox automatically from the POS_TAGs embedded in
+          the text (union of all row bboxes).  Used by tokenize_chunks() when
+          the chunk contains HTML table markup.
+    """
+    POS_TAG = re.compile(r'@@(\d+)\t([\d.]+)\t([\d.]+)\t([\d.]+)\t([\d.]+)##')
+    NUMBER = re.compile(
+        r'(?<!\d)'
+        r'\d[\d,，]*(?:[.。]\d+)?'
+        r'(?:\s*[a-zA-Z°%℃℉μΩkKmMgGwWvVaA]+)?'
+    )
+
+    def _make_loc_attrs(groups):
+        """Return the coordinate attribute string (without braces or linktext)."""
+        p, l, r, t, b = groups
+        box = [int(p), int(float(l)), int(float(t)), int(float(r)), int(float(b))]
+        return (
+            f'doc_id={doc_id}, page={box[0]}, '
+            f'x0={box[1]}, y0={box[2]}, x1={box[3]}, y1={box[4]}'
+        )
+
+    def _make_annotation(linktext: str, loc_attrs: str, source: str = '') -> str:
+        """Build a full {paragraph_location: linktext="...", ...} annotation.
+
+        source values:
+          ''       – regular text data (default, rendered blue by the frontend)
+          'table'  – value originates from a table cell (rendered yellow)
+          'llm'    – LLM-computed value (reserved for future use)
+        """
+        source_part = f'source={source}, ' if source else ''
+        return f'{{paragraph_location: linktext="{linktext}", {source_part}{loc_attrs}}}'
+
+    def _annotate_seg(seg: str, loc_attrs: str) -> str:
+        """Annotate a text segment with paragraph_location (regular non-table text).
+
+        All structured data and standalone numbers receive source=context so the
+        frontend renders them in blue and the user knows they come from document
+        body text (not from a table cell).
+        """
+        from rag.nlp.rag_tokenizer import _protect_patterns
+        seg, protected = _protect_patterns(seg)
+        seg = NUMBER.sub(
+            lambda m, la=loc_attrs: m.group() + _make_annotation(m.group(), la, source='context'),
+            seg,
+        )
+        for key, original in protected.items():
+            seg = seg.replace(key, original + _make_annotation(original, loc_attrs, source='context'))
+        return seg
+
+    def _annotate_table_content(seg: str, loc_attrs: str) -> str:
+        """Table-content annotation: annotate ONLY Priority 0 patterns (table/figure
+        names).  Cell values are intentionally left unannotated at parse time —
+        the LLM is instructed to generate source=table tags at inference time by
+        reusing the table name's coordinates.
+
+        Uses protect→restore to prevent overlapping Priority-0 patterns and to
+        prevent later patterns from matching inside an already-inserted tag.
+        """
+        from rag.nlp.rag_tokenizer import (
+            _PROTECT_PATTERNS, _PRIORITY_ZERO_END,
+            _PLACEHOLDER_PREFIX, _index_to_letters,
+        )
+        protected: dict[str, str] = {}
+        counter = [0]
+
+        def _replace(m: re.Match) -> str:
+            key = _PLACEHOLDER_PREFIX + _index_to_letters(counter[0])
+            counter[0] += 1
+            protected[key] = m.group()
+            return key
+
+        for pat in _PROTECT_PATTERNS[:_PRIORITY_ZERO_END]:
+            seg = pat.sub(_replace, seg)
+
+        for key, original in protected.items():
+            seg = seg.replace(key, original + _make_annotation(original, loc_attrs, source='table'))
+        return seg
+
+    # ── Table mode A: explicit bbox provided (text has no POS_TAGs) ──────────
+    # Used by tokenize_table() where poss[] carries the coordinates.
+    # Table/figure names → no source (blue). Cell values → source=table (yellow).
+    if table_bbox is not None:
+        page, left, right, top, bottom = table_bbox
+        loc_attrs = (
+            f'doc_id={doc_id}, page={int(page)}, '
+            f'x0={int(left)}, y0={int(top)}, x1={int(right)}, y1={int(bottom)}'
+        )
+        return _annotate_table_content(text, loc_attrs)
+
+    tags = [(m.start(), m.end(), m.groups()) for m in POS_TAG.finditer(text)]
+    if not tags:
+        return text
+
+    # ── Table mode B: derive bbox from embedded POS_TAGs (union of all rows) ─
+    # Used by tokenize_chunks() for chunks containing HTML table markup.
+    if use_table_bbox:
+        page   = int(tags[0][2][0])
+        left   = min(float(g[1]) for _, _, g in tags)
+        right  = max(float(g[2]) for _, _, g in tags)
+        top    = min(float(g[3]) for _, _, g in tags)
+        bottom = max(float(g[4]) for _, _, g in tags)
+        loc_attrs = (
+            f'doc_id={doc_id}, page={page}, '
+            f'x0={int(left)}, y0={int(top)}, x1={int(right)}, y1={int(bottom)}'
+        )
+        clean = POS_TAG.sub('', text)
+        return _annotate_table_names_only(clean, loc_attrs)
+
+    result = []
+    prev_end = 0
+
+    for tag_start, tag_end, groups in tags:
+        seg = text[prev_end:tag_start]
+        if seg:
+            # Look-ahead: annotate this segment with the coordinates of the tag
+            # that immediately follows it (the tag belongs to this section).
+            loc_attrs = _make_loc_attrs(groups)
+            seg = _annotate_seg(seg, loc_attrs)
+        result.append(seg)
+        result.append(text[tag_start:tag_end])  # preserve position tag for remove_tag()
+        prev_end = tag_end
+
+    # Text after the last position tag: use the last tag's coordinates.
+    last_seg = text[prev_end:]
+    if last_seg:
+        loc_attrs = _make_loc_attrs(tags[-1][2])
+        last_seg = _annotate_seg(last_seg, loc_attrs)
+    result.append(last_seg)
+
+    return ''.join(result)
+
+
+def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=None, precise_index=False):
     res = []
     # wrap up as es documents
     for ii, ck in enumerate(chunks):
@@ -311,6 +469,15 @@ def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=
             try:
                 d["image"], poss = pdf_parser.crop(ck, need_position=True)
                 add_positions(d, poss)
+                if precise_index:
+                    # Use table-level bbox when the chunk is a table (HTML markup
+                    # present) or when the doc itself is typed as a table.
+                    use_tbl = (
+                        d.get("doc_type_kwd") == "table"
+                        or "<tr>" in ck
+                        or "<td>" in ck
+                    )
+                    ck = annotate_numbers(ck, doc_id=doc.get("id", ""), use_table_bbox=use_tbl)
                 ck = pdf_parser.remove_tag(ck)
             except NotImplementedError:
                 pass
@@ -372,16 +539,32 @@ def tokenize_chunks_with_images(chunks, doc, eng, images, child_delimiters_patte
     return res
 
 
-def tokenize_table(tbls, doc, eng, batch_size=10):
+def tokenize_table(tbls, doc, eng, batch_size=10, precise_index=False):
     res = []
     # add tables
     for (img, rows), poss in tbls:
         if not rows:
             continue
+
+        # Compute the table-level bbox once (union of all row bboxes).
+        # Used for precise_index annotations so every number in the table chunk
+        # navigates to the whole table region rather than an individual row.
+        tbl_bbox: tuple | None = None
+        if precise_index and poss:
+            page   = int(poss[0][0]) + 1   # poss uses 0-based page index
+            left   = min(p[1] for p in poss)
+            right  = max(p[2] for p in poss)
+            top    = min(p[3] for p in poss)
+            bottom = max(p[4] for p in poss)
+            tbl_bbox = (page, left, right, top, bottom)
+
         if isinstance(rows, str):
             d = copy.deepcopy(doc)
-            tokenize(d, rows, eng)
-            d["content_with_weight"] = rows
+            r = rows
+            if tbl_bbox is not None:
+                r = annotate_numbers(r, doc_id=doc.get("id", ""), table_bbox=tbl_bbox)
+            tokenize(d, r, eng)
+            d["content_with_weight"] = r
             d["doc_type_kwd"] = "table"
             if img:
                 d["image"] = img
@@ -395,6 +578,8 @@ def tokenize_table(tbls, doc, eng, batch_size=10):
         for i in range(0, len(rows), batch_size):
             d = copy.deepcopy(doc)
             r = de.join(rows[i:i + batch_size])
+            if tbl_bbox is not None:
+                r = annotate_numbers(r, doc_id=doc.get("id", ""), table_bbox=tbl_bbox)
             tokenize(d, r, eng)
             d["doc_type_kwd"] = "table"
             if img:

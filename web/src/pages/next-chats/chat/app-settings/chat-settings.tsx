@@ -24,17 +24,29 @@ import { ChatPromptEngine } from './chat-prompt-engine';
 import { SavingButton } from './saving-button';
 import { useChatSettingSchema } from './use-chat-setting-schema';
 
-type ChatSettingsProps = { hasSingleChatBox: boolean };
+type ChatSettingsProps = { hasSingleChatBox: boolean; forceClose?: boolean };
 
-export function ChatSettings({ hasSingleChatBox }: ChatSettingsProps) {
+export function ChatSettings({
+  hasSingleChatBox,
+  forceClose,
+}: ChatSettingsProps) {
   const formSchema = useChatSettingSchema();
   const { data } = useFetchChat();
   const { updateChat, loading } = useUpdateChat();
   const { id } = useParams();
   const { t } = useTranslation();
 
-  const { visible: settingVisible, switchVisible: switchSettingVisible } =
-    useSetModalState(false);
+  const {
+    visible: settingVisible,
+    switchVisible: switchSettingVisible,
+    hideModal: hideSettingModal,
+  } = useSetModalState(false);
+
+  useEffect(() => {
+    if (forceClose && settingVisible) {
+      hideSettingModal();
+    }
+  }, [forceClose, settingVisible, hideSettingModal]);
 
   type FormSchemaType = z.infer<typeof formSchema>;
 
@@ -57,6 +69,7 @@ export function ChatSettings({ hasSingleChatBox }: ChatSettingsProps) {
         reasoning: false,
         cross_languages: [],
         toc_enhance: false,
+        precise_index: false,
       },
       top_n: 8,
       similarity_threshold: 0.2,

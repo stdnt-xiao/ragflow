@@ -750,9 +750,11 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     is_markdown = False
     table_context_size = max(0, int(parser_config.get("table_context_size", 0) or 0))
     image_context_size = max(0, int(parser_config.get("image_context_size", 0) or 0))
+    precise_index = bool(parser_config.get("precise_index", False))
 
     doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))}
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
+    doc["id"] = kwargs.get("doc_id", "")
     res = []
     pdf_parser = None
     section_images = None
@@ -853,7 +855,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             if int(parser_config.get("chunk_token_num", 0)) <= 0:
                 parser_config["chunk_token_num"] = 0
 
-        res = tokenize_table(tables, doc, is_english)
+        res = tokenize_table(tables, doc, is_english, precise_index=precise_index)
         callback(0.8, "Finish parsing.")
 
     elif re.search(r"\.(csv|xlsx?)$", filename, re.IGNORECASE):
@@ -875,7 +877,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             sections, tables = tcadp_parser.parse_pdf(filepath=filename, binary=binary, callback=callback, output_dir=os.environ.get("TCADP_OUTPUT_DIR", ""), file_type=file_type)
             sections = _normalize_section_text_for_rtl_presentation_forms(sections)
             parser_config["chunk_token_num"] = 0
-            res = tokenize_table(tables, doc, is_english)
+            res = tokenize_table(tables, doc, is_english, precise_index=precise_index)
             callback(0.8, "Finish parsing.")
         else:
             # Default DeepDOC parser
@@ -945,7 +947,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 soup = markdown_parser.md_to_html(section_text)
                 hyperlink_urls = markdown_parser.get_hyperlink_urls(soup)
                 urls.update(hyperlink_urls)
-        res = tokenize_table(tables, doc, is_english)
+        res = tokenize_table(tables, doc, is_english, precise_index=precise_index)
         callback(0.8, "Finish parsing.")
 
     elif re.search(r"\.(htm|html)$", filename, re.IGNORECASE):
@@ -1044,7 +1046,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         if has_images:
             res.extend(tokenize_chunks_with_images(chunks, doc, is_english, merged_images, child_delimiters_pattern=child_deli))
         else:
-            res.extend(tokenize_chunks(chunks, doc, is_english, pdf_parser, child_delimiters_pattern=child_deli))
+            res.extend(tokenize_chunks(chunks, doc, is_english, pdf_parser, child_delimiters_pattern=child_deli, precise_index=precise_index))
     else:
         if section_images:
             if all(image is None for image in section_images):
@@ -1056,7 +1058,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         else:
             chunks = naive_merge(sections, int(parser_config.get("chunk_token_num", 128)), parser_config.get("delimiter", "\n!?。；！？"), overlapped_percent)
 
-            res.extend(tokenize_chunks(chunks, doc, is_english, pdf_parser, child_delimiters_pattern=child_deli))
+            res.extend(tokenize_chunks(chunks, doc, is_english, pdf_parser, child_delimiters_pattern=child_deli, precise_index=precise_index))
 
     if urls and parser_config.get("analyze_hyperlink", False) and is_root:
         for index, url in enumerate(urls):

@@ -270,6 +270,13 @@ async def build_chunks(task, progress_callback):
 
     try:
         async with chunk_limiter:
+            # Merge KB-level flags (like precise_index) into the document parser_config.
+            # The document's own parser_config takes precedence for all other fields.
+            kb_overrides = {
+                k: v for k, v in task.get("kb_parser_config", {}).items()
+                if k in ("precise_index",) and k not in task["parser_config"]
+            }
+            merged_parser_config = {**kb_overrides, **task["parser_config"]}
             cks = await thread_pool_exec(
                 chunker.chunk,
                 task["name"],
@@ -279,8 +286,9 @@ async def build_chunks(task, progress_callback):
                 lang=task["language"],
                 callback=progress_callback,
                 kb_id=task["kb_id"],
-                parser_config=task["parser_config"],
+                parser_config=merged_parser_config,
                 tenant_id=task["tenant_id"],
+                doc_id=task["doc_id"],
             )
         logging.info("Chunking({}) {}/{} done".format(timer() - st, task["location"], task["name"]))
     except TaskCanceledException:

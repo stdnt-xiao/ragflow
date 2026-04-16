@@ -93,6 +93,7 @@ export const formSchema = z
           )
           .optional(),
         enable_metadata: z.boolean().optional(),
+        precise_index: z.boolean().optional(),
         llm_id: z.string().optional(),
       })
       .optional(),

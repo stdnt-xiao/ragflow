@@ -7,6 +7,7 @@ import { DelimiterFormField } from '@/components/delimiter-form-field';
 import { ExcelToHtmlFormField } from '@/components/excel-to-html-form-field';
 import { LayoutRecognizeFormField } from '@/components/layout-recognize-form-field';
 import { MaxTokenNumberFormField } from '@/components/max-token-number-from-field';
+import { PreciseIndexFormField } from '@/components/precise-index-form-field';
 import {
   ConfigurationFormContainer,
   MainContainer,
@@ -39,6 +40,7 @@ export function NaiveConfiguration() {
         <AutoKeywordsFormField></AutoKeywordsFormField>
         <AutoQuestionsFormField></AutoQuestionsFormField>
         <ExcelToHtmlFormField></ExcelToHtmlFormField>
+        <PreciseIndexFormField />
         {/* <TagItems></TagItems> */}
       </ConfigurationFormContainer>
     </MainContainer>

@@ -1,8 +1,18 @@
 import Image from '@/components/image';
 import SvgIcon from '@/components/svg-icon';
-import { IReference, IReferenceChunk } from '@/interfaces/database/chat';
+import {
+  IReference,
+  IReferenceChunk,
+  ParagraphLocationRef,
+} from '@/interfaces/database/chat';
 import { citationMarkerReg } from '@/utils/citation-utils';
 import { getExtension } from '@/utils/document-util';
+import {
+  PARAGRAPH_LOC_LEGACY_RE,
+  PARAGRAPH_LOC_RE,
+  parseParagraphLocation,
+  preprocessParagraphLoc,
+} from '@/utils/paragraph-location';
 import { getDirAttribute } from '@/utils/text-direction';
 import DOMPurify from 'dompurify';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -44,12 +54,14 @@ const getChunkIndex = (match: string) => parseCitationIndex(match);
 const MarkdownContent = ({
   reference,
   clickDocumentButton,
+  onParagraphLocationClick,
   content,
 }: {
   content: string;
   loading: boolean;
   reference: IReference;
   clickDocumentButton?: (documentId: string, chunk: IReferenceChunk) => void;
+  onParagraphLocationClick?: (ref: ParagraphLocationRef) => void;
 }) => {
   const { t } = useTranslation();
   const { setDocumentIds, data: fileThumbnails } =
@@ -64,7 +76,7 @@ const MarkdownContent = ({
     if (text === '') {
       text = t('chat.searching');
     }
-    const nextText = replaceTextByOldReg(text);
+    const nextText = replaceTextByOldReg(preprocessParagraphLoc(text));
     return pipe(replaceThinkToSection, preprocessLaTeX)(nextText);
   }, [content, t]);
 
@@ -233,6 +245,65 @@ const MarkdownContent = ({
     [getPopoverContent],
   );
 
+  const renderParagraphLocations = useCallback(
+    (nodes: ReturnType<typeof reactStringReplace>) => {
+      const renderLink = (match: string, i: number) => {
+        const parsed = parseParagraphLocation(match);
+        if (!parsed) return match;
+        const docAgg = reference?.doc_aggs?.find(
+          (d) => d.doc_id === parsed.doc_id,
+        );
+        const docName = docAgg?.doc_name ?? parsed.doc_id.slice(0, 8);
+        const isTable = parsed.source === 'table';
+        const spanClass = isTable
+          ? 'text-yellow-500 underline cursor-pointer'
+          : 'text-blue-500 underline cursor-pointer';
+        const sourceLabel =
+          parsed.source === 'table'
+            ? '表格数据'
+            : parsed.source === 'context'
+              ? '正文数据'
+              : '文档定位';
+
+        return (
+          <HoverCard key={i}>
+            <HoverCardTrigger asChild>
+              <span
+                className={spanClass}
+                onClick={() =>
+                  onParagraphLocationClick?.({
+                    doc_id: parsed.doc_id,
+                    doc_name: docName,
+                    page: parsed.page,
+                    x0: parsed.x0,
+                    y0: parsed.y0,
+                    x1: parsed.x1,
+                    y1: parsed.y1,
+                  })
+                }
+              >
+                {parsed.linktext}
+              </span>
+            </HoverCardTrigger>
+            <HoverCardContent className="text-xs space-y-1 w-auto max-w-sm">
+              <div className="font-medium truncate">{docName}</div>
+              <div className="font-medium">{parsed.linktext}</div>
+              <div className="text-text-secondary">{`page ${parsed.page}  (${parsed.x0}, ${parsed.y0}) – (${parsed.x1}, ${parsed.y1})`}</div>
+              <div className="text-text-secondary">{sourceLabel}</div>
+            </HoverCardContent>
+          </HoverCard>
+        );
+      };
+      // New format: pre-process to remove duplicate linktext before the tag,
+      // then replace {paragraph_location: linktext="...",...} tags.
+      let result = reactStringReplace(nodes, PARAGRAPH_LOC_RE, renderLink);
+      // Legacy format: NUMBER{paragraph_location: doc_id=...} (no linktext field).
+      result = reactStringReplace(result, PARAGRAPH_LOC_LEGACY_RE, renderLink);
+      return result;
+    },
+    [onParagraphLocationClick, reference],
+  );
+
   const dir = getDirAttribute(content.replace(citationMarkerReg, ''));
 
   return (
@@ -244,7 +315,7 @@ const MarkdownContent = ({
           {
             p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
             'custom-typography': ({ children }: { children: string }) =>
-              renderReference(children),
+              renderParagraphLocations(renderReference(children)),
             code(props: any) {
               const { children, className, ...rest } = props;
               const restProps = omit(rest, 'node');
