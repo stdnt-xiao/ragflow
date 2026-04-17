@@ -2,7 +2,7 @@ import { useGetDocumentUrl } from '@/hooks/use-document-request';
 import { ParagraphLocationRef } from '@/interfaces/database/chat';
 import { cn } from '@/lib/utils';
 import { LucidePanelRightClose } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IHighlight } from 'react-pdf-highlighter';
 import PdfPreview from '../document-preview/pdf-preview';
 import { Button } from '../ui/button';
@@ -13,6 +13,10 @@ interface ParagraphLocationPdfPanelProps {
   width?: number;
 }
 
+const MIN_WIDTH = 320;
+const MAX_WIDTH = 1200;
+const STORAGE_KEY = 'ragflow:paragraph-pdf-panel-width';
+
 export function ParagraphLocationPdfPanel({
   locationRef,
   onClose,
@@ -22,6 +26,62 @@ export function ParagraphLocationPdfPanel({
   const getDocumentUrl = useGetDocumentUrl(documentId);
   const url = getDocumentUrl(documentId);
   const [pageSize, setPageSize] = useState({ width: 849, height: 1200 });
+
+  // Resizable width state (persisted in localStorage)
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return width;
+    const saved = Number(window.localStorage.getItem(STORAGE_KEY));
+    return Number.isFinite(saved) && saved >= MIN_WIDTH && saved <= MAX_WIDTH
+      ? saved
+      : width;
+  });
+  const draggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(panelWidth);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      draggingRef.current = true;
+      startXRef.current = e.clientX;
+      startWidthRef.current = panelWidth;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [panelWidth],
+  );
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      // dragging left increases width (panel is on the right side)
+      const delta = startXRef.current - e.clientX;
+      const next = Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, startWidthRef.current + delta),
+      );
+      setPanelWidth(next);
+    };
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // persist whenever width settles
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(panelWidth));
+    } catch {}
+  }, [panelWidth]);
 
   const handleSetWidthAndHeight = useCallback((w: number, h: number) => {
     setPageSize((prev) => {
@@ -55,15 +115,28 @@ export function ParagraphLocationPdfPanel({
     ];
   }, [locationRef, pageSize]);
 
+  const isOpen = !!locationRef;
   return (
     <section
       className={cn(
-        'transition-[width] ease-out duration-300 flex-shrink-0 flex flex-col overflow-hidden border-l border-border',
-        locationRef ? `w-[${width}px]` : 'w-0',
+        'relative flex-shrink-0 flex flex-col overflow-hidden border-l border-border',
+        // Only animate when opening/closing, not while dragging
+        !draggingRef.current && 'transition-[width] ease-out duration-300',
       )}
+      style={{ width: isOpen ? panelWidth : 0 }}
     >
-      {locationRef && (
+      {isOpen && (
         <>
+          {/* Drag handle: 6px wide strip sitting on the left edge */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={handleMouseDown}
+            className="absolute left-0 top-0 bottom-0 w-1.5 -translate-x-1/2 cursor-col-resize z-20 group"
+            title="拖拽调整宽度"
+          >
+            <div className="h-full w-full group-hover:bg-primary/40 transition-colors" />
+          </div>
           <div className="p-4 pb-2 flex justify-between items-center text-sm font-medium shrink-0">
             <span
               className="truncate max-w-[360px]"

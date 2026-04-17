@@ -32,11 +32,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 # selenium:      libatk-bridge2.0-0                       chrome-linux64-121-0-6167-85
 # Building C extensions: libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev
 RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    if [ "$NEED_MIRROR" == "1" ]; then \
+        echo "Types: deb" > /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "URIs: http://mirrors.aliyun.com/ubuntu" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Suites: noble noble-updates noble-backports" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Components: main restricted universe multiverse" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Types: deb" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "URIs: http://mirrors.aliyun.com/ubuntu" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Suites: noble-security" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Components: main restricted universe multiverse" >> /etc/apt/sources.list.d/ubuntu.sources && \
+        echo "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" >> /etc/apt/sources.list.d/ubuntu.sources; \
+    fi; \
     apt update && \
     apt --no-install-recommends install -y ca-certificates; \
     if [ "$NEED_MIRROR" == "1" ]; then \
-        sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources; \
-        sed -i 's|http://security.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources; \
+        sed -i 's|http://mirrors.aliyun.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources; \
     fi; \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache && \
@@ -81,25 +93,41 @@ RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps 
     && uv python install 3.12
 
 ENV PYTHONDONTWRITEBYTECODE=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
-    UV_HTTP_TIMEOUT=200 \
-    UV_HTTP_RETRIES=3
+    UV_HTTP_TIMEOUT=600 \
+    UV_HTTP_RETRIES=5
 ENV PATH=/root/.local/bin:$PATH
 
 # nodejs 12.22 on Ubuntu 22.04 is too old
+ARG NODE_VERSION=v20.19.4
 RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt purge -y nodejs npm && \
-    apt autoremove -y && \
-    apt update && \
-    apt install -y nodejs
+    apt purge -y nodejs npm || true; \
+    apt autoremove -y || true; \
+    if [ "$NEED_MIRROR" == "1" ]; then \
+        NODE_DIST_BASE="https://registry.npmmirror.com/-/binary/node"; \
+    else \
+        NODE_DIST_BASE="https://nodejs.org/dist"; \
+    fi; \
+    arch="$(uname -m)"; \
+    case "$arch" in \
+        x86_64)  node_arch="x64" ;; \
+        aarch64|arm64) node_arch="arm64" ;; \
+        *) echo "Unsupported arch: $arch"; exit 1 ;; \
+    esac; \
+    node_pkg="node-${NODE_VERSION}-linux-${node_arch}.tar.xz"; \
+    curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+        "${NODE_DIST_BASE}/${NODE_VERSION}/${node_pkg}" -o /tmp/node.tar.xz && \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+        --exclude='CHANGELOG.md' --exclude='LICENSE' --exclude='README.md' && \
+    rm -f /tmp/node.tar.xz && \
+    node --version && npm --version
 
 # Add msssql ODBC driver
 # macOS ARM64 environment, install msodbcsql18.
 # general x86_64 environment, install msodbcsql17.
 RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
-    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
-    curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
-    apt update && \
+    curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt -o Acquire::Retries=5 update && \
     arch="$(uname -m)"; \
     if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
         # ARM64 (macOS/Apple Silicon or Linux aarch64) \
@@ -154,6 +182,13 @@ RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
 COPY web web
 COPY docs docs
 RUN --mount=type=cache,id=ragflow_npm,target=/root/.npm,sharing=locked \
+    if [ "$NEED_MIRROR" == "1" ]; then \
+        npm config set registry https://registry.npmmirror.com/ && \
+        npm config set disturl https://registry.npmmirror.com/-/binary/node && \
+        npm config set electron_mirror https://registry.npmmirror.com/-/binary/electron/ && \
+        npm config set sass_binary_site https://registry.npmmirror.com/-/binary/node-sass && \
+        npm config set puppeteer_download_host https://registry.npmmirror.com/-/binary; \
+    fi; \
     cd web && NODE_OPTIONS="--max-old-space-size=8192" npm install && \
     NODE_OPTIONS="--max-old-space-size=8192" VITE_BUILD_SOURCEMAP=false VITE_MINIFY=esbuild npm run build
 
