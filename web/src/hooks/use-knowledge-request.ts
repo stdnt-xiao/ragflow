@@ -303,6 +303,9 @@ export const useUpdateKnowledge = (shouldFetchList = false) => {
       task_page_size,
       pages,
       precise_index,
+      children_delimiter,
+      use_parent_child,
+      enable_children,
       ext,
       ...parserExt
     } = parserConfig;
@@ -321,6 +324,12 @@ export const useUpdateKnowledge = (shouldFetchList = false) => {
       task_page_size,
       pages,
       precise_index,
+      parent_child: enable_children
+        ? {
+            children_delimiter,
+            use_parent_child: use_parent_child ?? enable_children,
+          }
+        : undefined,
       ext: { ...ext, ...parserExt },
     };
   };
@@ -615,6 +624,7 @@ export const useTestChunkRetrieval = (): ResponsePostType<ITestingResult> & {
       const { data } = await kbService.retrievalTest({
         ...values,
         kb_id: values.kb_id ?? knowledgeBaseId,
+        highlight: true,
         page,
         size: pageSize,
       });
@@ -659,6 +669,7 @@ export const useTestChunkAllRetrieval = (): ResponsePostType<ITestingResult> & {
       const { data } = await kbService.retrievalTest({
         ...values,
         kb_id: values.kb_id ?? knowledgeBaseId,
+        highlight: true,
         doc_ids: [],
         page,
         size: pageSize,
