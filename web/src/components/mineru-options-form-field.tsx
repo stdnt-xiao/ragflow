@@ -1,4 +1,5 @@
 import { RAGFlowFormItem } from '@/components/ragflow-form';
+import { Input } from '@/components/ui/input';
 import { RAGFlowSelect } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { LLMFactory } from '@/constants/llm';
@@ -59,6 +60,46 @@ export function MinerUOptionsFormField({
       <div className="text-sm font-medium text-text-secondary">
         {t('knowledgeConfiguration.mineruOptions', 'MinerU Options')}
       </div>
+
+      <RAGFlowFormItem
+        name={buildName('mineru_server_url')}
+        label={t('knowledgeConfiguration.mineruServerUrl', 'Server URL')}
+        tooltip={t(
+          'knowledgeConfiguration.mineruServerUrlTip',
+          'MinerU API server URL (e.g. http://localhost:8000). Leave blank to use the globally configured MinerU service.',
+        )}
+        horizontal={true}
+      >
+        {(field) => (
+          <Input
+            {...field}
+            value={field.value || ''}
+            placeholder="http://localhost:8000"
+          />
+        )}
+      </RAGFlowFormItem>
+
+      <RAGFlowFormItem
+        name={buildName('mineru_api_key')}
+        label={t('knowledgeConfiguration.mineruApiKey', 'API Key')}
+        tooltip={t(
+          'knowledgeConfiguration.mineruApiKeyTip',
+          'API key for MinerU cloud service. Leave blank for local deployment.',
+        )}
+        horizontal={true}
+      >
+        {(field) => (
+          <Input
+            {...field}
+            value={field.value || ''}
+            type="password"
+            placeholder={t(
+              'knowledgeConfiguration.mineruApiKeyPlaceholder',
+              'Leave blank for local deployment',
+            )}
+          />
+        )}
+      </RAGFlowFormItem>
 
       <RAGFlowFormItem
         name={buildName('mineru_parse_method')}

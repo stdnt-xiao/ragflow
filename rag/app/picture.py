@@ -28,7 +28,13 @@ from common.string_utils import clean_markdown_block
 from deepdoc.vision import OCR
 from rag.nlp import attach_media_context, rag_tokenizer, tokenize
 
-ocr = OCR()
+_ocr = None
+
+def _get_ocr():
+    global _ocr
+    if _ocr is None:
+        _ocr = OCR()
+    return _ocr
 
 # Gemini supported MIME types
 VIDEO_EXTS = [".mp4", ".mov", ".avi", ".flv", ".mpeg", ".mpg", ".webm", ".wmv", ".3gp", ".3gpp", ".mkv"]
@@ -70,7 +76,7 @@ def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
                 "doc_type_kwd": "image",
             }
         )
-        bxs = ocr(np.array(img))
+        bxs = _get_ocr()(np.array(img))
         txt = "\n".join([t[0] for _, t in bxs if t[0]])
         callback(0.4, "Finish OCR: (%s ...)" % txt[:12])
         if (eng and len(txt.split()) > 32) or len(txt) > 32:

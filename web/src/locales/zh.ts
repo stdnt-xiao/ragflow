@@ -412,6 +412,12 @@ export default {
         '抓取图像与表格上下方的 N 个 token，为该 chunk 提供更丰富的背景上下文。',
       autoMetadata: '自动元数据',
       mineruOptions: 'MinerU 选项',
+      mineruServerUrl: '服务器 URL',
+      mineruServerUrlTip:
+        'MinerU API 服务器地址（例如本地 http://localhost:8000，或官方云端地址）。留空则使用全局配置的 MinerU 服务。',
+      mineruApiKey: 'API Key',
+      mineruApiKeyTip: 'MinerU 云服务的 API Key。本地部署时留空。',
+      mineruApiKeyPlaceholder: '本地部署请留空',
       mineruParseMethod: '解析方法',
       mineruParseMethodTip:
         'PDF 解析方法：auto（自动检测）、txt（文本提取）、ocr（光学字符识别）',

@@ -84,10 +84,13 @@ restart_backend() {
   success "task_executor 已启动 (PID=$TASK_PID)"
 
   # 等待后端健康（最长等 5 分钟）
-  info "等待后端就绪（首次启动需下载模型文件，请耐心等待）..."
+  # 接受 2xx 和 4xx（401/403 表示服务已就绪，只是需要认证）
+  info "等待后端就绪（首次启动约需 1-2 分钟）..."
   for i in $(seq 1 60); do
-    if curl --noproxy localhost,127.0.0.1 -sf http://localhost:9380/v1/system/status &>/dev/null 2>&1; then
-      success "后端 API 响应正常"
+    status=$(curl --noproxy localhost,127.0.0.1 -s -o /dev/null -w "%{http_code}" \
+      http://localhost:9380/v1/system/status 2>/dev/null) || true
+    if [[ "$status" =~ ^[2-4] ]]; then
+      success "后端 API 响应正常 (HTTP $status)"
       return 0
     fi
     # 检查进程是否崩溃
@@ -95,7 +98,7 @@ restart_backend() {
       warn "后端进程已退出，查看日志: tail -f $BACKEND_LOG"
       return 1
     fi
-    [ $((i % 10)) -eq 0 ] && info "仍在加载... (${i}/60，已等 $((i*5))s)"
+    [ $((i % 6)) -eq 0 ] && info "仍在加载... (已等 $((i*5))s)"
     sleep 5
   done
   warn "5 分钟内后端未响应，请查看日志: tail -f $BACKEND_LOG"

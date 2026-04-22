@@ -143,6 +143,25 @@ def by_mineru(
             except Exception as e:
                 logging.error(f"Failed to parse pdf via LLMBundle MinerU ({mineru_llm_name}): {e}")
 
+    # Fallback: create MinerUParser directly from parser_config or env var
+    parser_config = kwargs.get("parser_config", {})
+    mineru_api = parser_config.get("mineru_server_url", "") or os.environ.get("MINERU_APISERVER", "")
+    if mineru_api:
+        from deepdoc.parser.mineru_parser import MinerUParser
+        pdf_parser = MinerUParser(
+            mineru_api=mineru_api,
+            mineru_api_key=parser_config.get("mineru_api_key", ""),
+        )
+        sections, tables = pdf_parser.parse_pdf(
+            filepath=filename,
+            binary=binary,
+            callback=callback,
+            parse_method=parse_method,
+            lang=lang,
+            **kwargs,
+        )
+        return sections, tables, pdf_parser
+
     if callback:
         callback(-1, "MinerU not found.")
     return None, None, None

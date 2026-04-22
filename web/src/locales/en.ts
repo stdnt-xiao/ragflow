@@ -461,6 +461,13 @@ Example: A 1 KB message with 1024-dim embedding uses ~9 KB. The 5 MB default lim
         'Captures N tokens of text above and below the image & table to provide richer background context.',
       autoMetadata: 'Auto metadata',
       mineruOptions: 'MinerU options',
+      mineruServerUrl: 'Server URL',
+      mineruServerUrlTip:
+        'MinerU API server URL (e.g. http://localhost:8000 for local, or official cloud endpoint). Leave blank to use the globally configured MinerU service.',
+      mineruApiKey: 'API Key',
+      mineruApiKeyTip:
+        'API key for MinerU cloud service. Leave blank for local deployment.',
+      mineruApiKeyPlaceholder: 'Leave blank for local deployment',
       mineruParseMethod: 'Parse method',
       mineruParseMethodTip:
         'Method for parsing PDF: auto (automatic detection), txt (text extraction), ocr (optical character recognition)',
