@@ -317,6 +317,9 @@ class MinerUParser(RAGFlowPdfParser):
                             shutil.copyfileobj(response.raw, f)
 
                         self.logger.info(f"[MinerU] Unzip to {output_path}...")
+                        # Log ZIP contents before extraction
+                        with zipfile.ZipFile(output_zip_path, "r") as _zf:
+                            self.logger.info(f"[MinerU] ZIP contents: {_zf.namelist()}")
                         self._extract_zip_no_root(output_zip_path, output_path, pdf_file_name + "/")
 
                         if callback:
@@ -661,7 +664,7 @@ class MinerUParser(RAGFlowPdfParser):
                 lang=MinerULanguage(mineru_lang_code),
                 method=MinerUParseMethod(mineru_method_raw_str),
                 server_url=server_url,
-                delete_output=delete_output,
+                delete_output=False,  # DEBUG: keep output for inspection
                 parse_method=parse_method,
                 formula_enable=enable_formula,
                 table_enable=enable_table,
@@ -669,10 +672,16 @@ class MinerUParser(RAGFlowPdfParser):
             final_out_dir = self._run_mineru(pdf, out_dir, options, callback=callback)
             outputs = self._read_output(final_out_dir, pdf.stem, method=mineru_method_raw_str, backend=backend)
             self.logger.info(f"[MinerU] Parsed {len(outputs)} blocks from PDF.")
+            for i, blk in enumerate(outputs):
+                self.logger.info(f"[MinerU] block[{i}] type={blk.get('type')} text={repr(blk.get('text','')[:80])}")
             if callback:
                 callback(0.75, f"[MinerU] Parsed {len(outputs)} blocks from PDF.")
 
-            return self._transfer_to_sections(outputs, parse_method), self._transfer_to_tables(outputs)
+            sections = self._transfer_to_sections(outputs, parse_method)
+            self.logger.info(f"[MinerU] sections count={len(sections)}")
+            for i, sec in enumerate(sections):
+                self.logger.info(f"[MinerU] section[{i}] text={repr(sec[0][:80])}")
+            return sections, self._transfer_to_tables(outputs)
         finally:
             if temp_pdf and temp_pdf.exists():
                 try:

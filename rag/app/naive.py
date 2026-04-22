@@ -848,6 +848,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
 
         name = layout_recognizer.strip().lower()
         parser = PARSERS.get(name, by_plaintext)
+        logging.info("PDF parser: %s (model=%s) file=%s", name, parser_model_name, filename)
         callback(0.1, "Start to parse.")
 
         sections, tables, pdf_parser = parser(

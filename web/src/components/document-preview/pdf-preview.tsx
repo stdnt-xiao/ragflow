@@ -46,21 +46,33 @@ const PdfPreview = ({
 }: IProps) => {
   // const url = useGetDocumentUrl();
 
-  const ref = useRef<(highlight: IHighlight) => void>(() => {});
+  const ref = useRef<((highlight: IHighlight) => void) | null>(null);
+  const pendingHighlightRef = useRef<IHighlight | null>(null);
   const error = useCatchDocumentError(url);
 
   const resetHash = () => {};
 
+  // Whenever `url` changes we start over: the PdfHighlighter remounts
+  // and scrollRef will be re-assigned via onDocumentReady.
   useEffect(() => {
-    let timer = null;
-    if (state?.length && state?.length > 0) {
-      timer = setTimeout(() => {
-        ref?.current(state[0]);
-      }, 100);
+    ref.current = null;
+  }, [url]);
+
+  // Try to scroll to the first highlight. If the PDF isn't ready yet
+  // (ref.current not assigned), stash it — scrollRef callback below
+  // will flush the pending highlight once the document is ready.
+  useEffect(() => {
+    const target = state && state.length > 0 ? state[0] : null;
+    if (!target) {
+      pendingHighlightRef.current = null;
+      return;
     }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
+    if (ref.current) {
+      ref.current(target);
+      pendingHighlightRef.current = null;
+    } else {
+      pendingHighlightRef.current = target;
+    }
   }, [state]);
 
   const httpHeaders = {
@@ -101,6 +113,13 @@ const PdfPreview = ({
               onScrollChange={resetHash}
               scrollRef={(scrollTo) => {
                 ref.current = scrollTo;
+                // Document is now ready. If the user clicked a citation
+                // before loading finished, jump to it now.
+                const pending = pendingHighlightRef.current;
+                if (pending) {
+                  pendingHighlightRef.current = null;
+                  scrollTo(pending);
+                }
               }}
               onSelectionFinished={() => null}
               highlightTransform={(
@@ -112,8 +131,8 @@ const PdfPreview = ({
                 screenshot,
                 isScrolledTo,
               ) => {
-                const isTextHighlight = !Boolean(
-                  highlight.content && highlight.content.image,
+                const isTextHighlight = !(
+                  highlight.content && highlight.content.image
                 );
 
                 const component = isTextHighlight ? (

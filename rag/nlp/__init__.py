@@ -431,7 +431,7 @@ def annotate_numbers(
             f'x0={int(left)}, y0={int(top)}, x1={int(right)}, y1={int(bottom)}'
         )
         clean = POS_TAG.sub('', text)
-        return _annotate_table_names_only(clean, loc_attrs)
+        return _annotate_table_content(clean, loc_attrs)
 
     result = []
     prev_end = 0
@@ -1280,7 +1280,7 @@ def naive_merge(sections: str | list, chunk_token_num=128, delimiter="\n。；�
             cks.append(t)
             tk_nums.append(tnum)
         else:
-            if cks[-1].find(pos) < 0:
+            if t.find(pos) < 0:
                 t += pos
             cks[-1] += t
             tk_nums[-1] += tnum
@@ -1337,7 +1337,7 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n。
             result_images.append(image)
             tk_nums.append(tnum)
         else:
-            if cks[-1].find(pos) < 0:
+            if t.find(pos) < 0:
                 t += pos
             cks[-1] += t
             if result_images[-1] is None:

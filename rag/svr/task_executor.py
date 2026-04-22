@@ -270,13 +270,24 @@ async def build_chunks(task, progress_callback):
 
     try:
         async with chunk_limiter:
-            # Merge KB-level flags (like precise_index) into the document parser_config.
-            # The document's own parser_config takes precedence for all other fields.
+            # Merge KB-level flags into the document parser_config.
+            # layout_recognize is always taken from KB (KB setting is authoritative).
+            # precise_index is inherited from KB only when absent in document config.
+            kb_config = task.get("kb_parser_config", {})
             kb_overrides = {
-                k: v for k, v in task.get("kb_parser_config", {}).items()
+                k: v for k, v in kb_config.items()
                 if k in ("precise_index",) and k not in task["parser_config"]
             }
             merged_parser_config = {**kb_overrides, **task["parser_config"]}
+            # KB-authoritative fields always override document-level config
+            for kb_authoritative_key in (
+                "layout_recognize",
+                "mineru_server_url", "mineru_api_key",
+                "mineru_parse_method", "mineru_lang",
+                "mineru_formula_enable", "mineru_table_enable",
+            ):
+                if kb_authoritative_key in kb_config:
+                    merged_parser_config[kb_authoritative_key] = kb_config[kb_authoritative_key]
             cks = await thread_pool_exec(
                 chunker.chunk,
                 task["name"],

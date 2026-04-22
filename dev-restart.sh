@@ -77,7 +77,7 @@ restart_backend() {
   NLTK_DATA="$RAGFLOW_ROOT/nltk_data" \
   PYTHONUNBUFFERED=1 \
   "$RAGFLOW_ROOT/.venv/bin/python" -u "$RAGFLOW_ROOT/rag/svr/task_executor.py" 0 \
-  >> "$TASK_EXECUTOR_LOG" 2>&1 &
+  > /dev/null 2>&1 &
   TASK_PID=$!
   echo $TASK_PID > "$LOG_DIR/task_executor.pid"
   disown $TASK_PID 2>/dev/null || true
